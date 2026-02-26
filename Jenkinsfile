@@ -95,6 +95,33 @@ EOF
             }
         }
     }
+        stage('Update Manifest') {
+            steps {
+                // On utilise un conteneur avec Git installé (on peut en ajouter un au pod ou utiliser l'image par défaut)
+                container('kaniko') { // On peut détourner kaniko ou ajouter un conteneur 'alpine/git'
+                    withCredentials([usernamePassword(credentialsId: 'github-creds-infra', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+                        sh """
+                        # Configuration de Git
+                        git config --global user.email "jenkins@example.com"
+                        git config --global user.name "Jenkins CI"
+                        
+                        # Clonage du repo d'infra
+                        git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/app-py-test-infra.git
+                        cd app-py-test-infra
+                        
+                        # Mise à jour de l'image dans le fichier deployment.yaml
+                        # On remplace l'ancienne image par la nouvelle (ici on force le refresh)
+                        sed -i "s|image: .*|image: disizwil365/mon-app-devsecops:latest|g" deployment.yaml
+                        
+                        # Commit et Push
+                        git add deployment.yaml
+                        git commit -m "Update image to latest by Jenkins Build #${env.BUILD_NUMBER}" || echo "No changes to commit"
+                        git push origin main
+                        """
+                    }
+                }
+            }
+        }
 
     post {
         success {
