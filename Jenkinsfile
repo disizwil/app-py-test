@@ -17,33 +17,63 @@ pipeline {
             '''
         }
     }
+    
+    environment {
+        // On définit le nom de l'image ici pour plus de clarté
+        IMAGE_NAME = "disizwil365/mon-app-devsecops:latest"
+    }
+
     stages {
         stage('Checkout') {
             steps {
+                // Récupère le code depuis GitHub
                 checkout scm
             }
         }
-        stage('Build & Push') {
+
+        stage('Build & Push Image') {
             steps {
                 container('kaniko') {
-                    // On utilise les credentials Docker Hub créés précédemment
+                    // Utilise l'ID du credential que tu as créé dans Jenkins
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh """
-                        /kaniko/executor --context `pwd` \
+                        # 1. Création de la config d'authentification pour Kaniko
+                        mkdir -p /kaniko/.docker
+                        echo "{\\"auths\\":{\\"https://index.docker.io/v2/\\":{\\"auth\\":\\"\$(echo -n \${DOCKER_USER}:\${DOCKER_PASSWORD} | base64)\\"}}}" > /kaniko/.docker/config.json
+                        
+                        # 2. Construction et envoi de l'image
+                        /kaniko/executor --context ${env.WORKSPACE} \
                             --dockerfile Dockerfile \
-                            --destination \$DOCKER_USER/mon-app-devsecops:latest
+                            --destination ${IMAGE_NAME}
                         """
                     }
                 }
             }
         }
-        stage('Security Scan') {
+
+        stage('Security Scan (Trivy)') {
             steps {
                 container('trivy') {
-                   // On scanne l'image qu'on vient de pousser
-                    sh "trivy image --exit-code 1 --severity CRITICAL disizwil365/mon-app-devsecops:latest"
+                    echo "🔍 Analyse de l'image poussée : ${IMAGE_NAME}"
+                    // Le pipeline échouera si des vulnérabilités CRITICAL sont trouvées
+                    sh "trivy image --exit-code 1 --severity CRITICAL ${IMAGE_NAME}"
                 }
             }
+        }
+
+        stage('Cleanup') {
+            steps {
+                echo "Nettoyage terminé. L'image est disponible sur Docker Hub."
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✅ Build, Push et Scan réussis !"
+        }
+        failure {
+            echo "❌ Le pipeline a échoué. Vérifiez les logs (Auth ou Sécurité)."
         }
     }
 }
