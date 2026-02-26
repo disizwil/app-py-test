@@ -97,7 +97,7 @@ EOF
                             sed -i "s|image: .*|image: ${IMAGE_NAME}|g" deployment.yaml
                             
                             git add deployment.yaml
-                            git commit -m "Update image to ${IMAGE_TAG} by Jenkins Build #${env.BUILD_NUMBER}" || echo "No changes to commit"
+                            git commit -m "Update image to ${IMAGE_NAME} (build #${env.BUILD_NUMBER})" || echo "No changes to commit"
                             git push origin main
                         """
                     }
